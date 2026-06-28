@@ -1,10 +1,8 @@
-import psutil
-import smtplib
+import yaml
 import logging
-import json
-import time
+import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime
+from checks.registry import build_checks
 
 logging.basicConfig(
     filename="monitor.log",
@@ -12,39 +10,16 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-def load_config(path="config.json"):
+
+def load_config(path="config.yml"):
     with open(path, "r") as f:
-        return json.load(f)
+        return yaml.safe_load(f)
 
-def get_cpu_usage():
-    return psutil.cpu_percent(interval=1)
 
-def get_ram_usage():
-    return psutil.virtual_memory().percent
-
-def get_disk_usage(path="/"):
-    return psutil.disk_usage(path).percent
-
-def get_battery():
-    battery = psutil.sensors_battery()
-    if battery is None:
-        return None
-    return battery.percent
-
-def check_thresholds(metrics, thresholds):
-    problems = []
-    if metrics['cpu'] > thresholds['cpu']:
-        problems.append(f"CPU la {metrics['cpu']}, threshold {thresholds['cpu']}%")
-    if metrics['ram'] > thresholds['ram']:
-        problems.append(f"RAM la {metrics['ram']}, threshold {thresholds['ram']}%")
-    if metrics['disk'] > thresholds['disk']:
-        problems.append(f"Disk la {metrics['disk']}, threshold {thresholds['disk']}%")
-    return problems
-
-def send_email_alert(problems, email_config):
-    body = "\n".join(problems)
+def send_email_alert(failed_results, email_config):
+    body = "\n".join(str(r) for r in failed_results)
     msg = MIMEText(body)
-    msg['Subject'] = "Alerta System Healt Monitor"
+    msg['Subject'] = "Health Monitor Alert"
     msg['From'] = email_config['sender']
     msg['To'] = email_config['receiver']
 
@@ -56,18 +31,21 @@ def send_email_alert(problems, email_config):
 
 def main():
     config = load_config()
-    metrics = {
-        'cpu': get_cpu_usage(),
-        'ram': get_ram_usage(),
-        'disk': get_disk_usage(),
-    }
-    logging.info(f"CPU={metrics['cpu']}% RAM={metrics['ram']}% Disk={metrics['disk']}%")
+    checks = build_checks(config["checks"])
 
-    problems = check_thresholds(metrics, config['thresholds'])
+    results = []
+    for check in checks:
+        result = check.run()
+        results.append(result)
+        log_level = logging.INFO if result.ok else logging.WARNING
+        logging.log(log_level, str(result))
 
-    if problems:
-        send_email_alert(problems, config['email'])
-        logging.warning(f"Alerta trimisa: {problems}")
+    failed = [r for r in results if not r.ok]
+
+    if failed:
+        send_email_alert(failed, config['email'])
+        logging.warning(f"Alert sent for {len(failed)} failed check(s)")
+
 
 if __name__ == "__main__":
     main()

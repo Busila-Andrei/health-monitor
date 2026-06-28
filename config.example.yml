@@ -1,0 +1,49 @@
+# Health Monitor configuration
+# Set 'enabled: false' to disable a check without deleting it from this file.
+# You can have multiple checks of the same type (e.g. multiple processes, ports, or disk paths).
+
+checks:
+  - type: cpu_threshold
+    threshold: 85
+    enabled: true
+
+  - type: ram_threshold
+    threshold: 85
+    enabled: true
+
+  - type: disk_threshold
+    threshold: 90
+    path: "/"
+    enabled: true
+
+  - type: disk_threshold
+    threshold: 95
+    path: "/home"
+    enabled: true
+
+  # Middleware process checks - enable these on the work server, not on personal laptop
+  - type: process_running
+    pattern: "WebSphere"
+    enabled: false
+
+  - type: process_running
+    pattern: "ace"
+    enabled: false
+
+  # Middleware port checks
+  - type: port_open
+    host: localhost
+    port: 9443
+    enabled: false
+
+  - type: port_open
+    host: localhost
+    port: 1414
+    enabled: false
+
+email:
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
+  sender: your-email@example.com
+  password: your-app-password
+  receiver: alert-receiver@example.com
